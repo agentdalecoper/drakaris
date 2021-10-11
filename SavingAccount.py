@@ -6,11 +6,12 @@ class SavingAccount:
     "status": "ACTIVE"
   }"""
 
-    def __init__(self, json):
+    def __init__(self, json, ts):
         self.savings_account_id = json.get('savings_account_id')
         self.balance = json.get('balance')
         self.interest_rate_percent = json.get('interest_rate_percent')
         self.status = json.get('status')
+        self.ts = ts
 
     def to_dict(self):
         return {
@@ -18,4 +19,5 @@ class SavingAccount:
             'balance': self.balance,
             'interest_rate_percent': self.interest_rate_percent,
             'status': self.status,
+            'ts': self.ts
         }

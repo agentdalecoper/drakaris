@@ -8,7 +8,7 @@ class Account:
   }
     """
 
-    def __init__(self, json):
+    def __init__(self, json, ts):
         self.account_id = json.get('account_id')
         self.name = json.get('name')
         self.address = json.get('address')
@@ -16,6 +16,7 @@ class Account:
         self.email = json.get('email')
         self.card_id = json.get('card_id')
         self.savings_account_id = json.get('savings_account_id')
+        self.ts = ts
 
     def to_dict(self):
         return {
@@ -26,4 +27,5 @@ class Account:
             'email': self.email,
             'card_id': self.card_id,
             'savings_account_id': self.savings_account_id,
+            'ts': self.ts
         }

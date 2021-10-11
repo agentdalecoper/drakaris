@@ -11,12 +11,13 @@
 
 class Card:
 
-    def __init__(self, json):
+    def __init__(self, json, ts):
         self.card_id = json.get('card_id')
         self.card_number = json.get('card_number')
         self.credit_used = json.get('credit_used')
         self.monthly_limit = json.get('monthly_limit')
         self.status = json.get('status')
+        self.ts = ts
 
     def to_dict(self):
         return {
@@ -25,4 +26,5 @@ class Card:
             'credit_used': self.credit_used,
             'monthly_limit': self.monthly_limit,
             'status': self.status,
+            'ts': self.ts
         }
