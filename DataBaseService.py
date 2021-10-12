@@ -60,64 +60,54 @@ cards_history_df = compute_dfs(cards_logs_df, Card)
 savings_accounts_logs_df = read_dataframe("data/savings_accounts")
 savings_accounts_history_df = compute_dfs(savings_accounts_logs_df, SavingAccount)
 
-# а что если смерджить все три в одну, и выделять группы по
-# можно добавить тогда сразу один ивент туда в кардс для проверки
-
-#res = accounts_history_df.merge(cards_history_df, on=['card_id'], how='outer', suffixes=('', '_card'))
-res = savings_accounts_history_df.merge(accounts_history_df, on=['savings_account_id'], how='left', suffixes=('_savings_account', '_account'))
-#res = res.merge(cards_history_df, on=['card_id'], how='outer', suffixes=('', '_card_id'))
-res = res.sort_values('ts_savings_account')
-# далее группируем по [account_id, savings_account_id, ts_acc] и находим максимальный ts в группе но который меньше чем
-# (если такой записи нет, то по идее вставляет NAN, но в этом плане пофиг поскольку если есть ссылка то должна быть эта
-print('======')
-#print(res)
-# стоой погоди - а если не мерджить - а просто историю предлагать - тоесть забить на accounts
-# заить на мердж таймстампов чтоли хочу
-# давай короче вот что - сделаю приджоин обеих таблиц чтобы работало потом посмотрю
-
-
-
-grouped = res.groupby(['account_id', 'savings_account_id', 'ts_savings_account'], dropna=False)
 lst=[]
-for cols, group in grouped:
-    if len(group) == 1:
-        lst.append(group.iloc[0])
-        continue
+columns = accounts_history_df.columns
+columns = columns.append(cards_history_df.columns)
+columns = columns.append(savings_accounts_history_df.columns)
+columns = list(dict.fromkeys(columns))
+df = pandas.DataFrame(columns=columns)
 
-    closest_row = group[group['ts_account'] <= group[f'ts_savings_account']].sort_values(f'ts_savings_account').iloc[0]
-    lst.append(closest_row)
+def get_status_at_time(ts):
+    #print(ts)
+    acc_row = accounts_history_df.iloc[[accounts_history_df[accounts_history_df['ts'] <= ts]['ts'].idxmax()]]
+    if acc_row['card_id'].values[0]:
+        card_row = join_table(acc_row, ts, cards_history_df, 'card_id')
+        acc_row = acc_row.merge(card_row, on=['card_id'], suffixes=('', '_card'))
 
-print(pd.DataFrame.from_records(lst))
+    if acc_row['savings_account_id'].values[0]:
+        saving_row = join_table(acc_row, ts, savings_accounts_history_df, 'savings_account_id')
+        acc_row = acc_row.merge(saving_row, on=['savings_account_id'], suffixes=('', '_savings_account'))
 
+    #print(acc_row)
+    return acc_row
 
-res = cards_history_df.merge(accounts_history_df, on=['card_id'], how='left', suffixes=('_card', '_account'))
-#res = res.merge(cards_history_df, on=['card_id'], how='outer', suffixes=('', '_card_id'))
-res = res.sort_values('ts_savings_account')
-# далее группируем по [account_id, savings_account_id, ts_acc] и находим максимальный ts в группе но который меньше чем
-# (если такой записи нет, то по идее вставляет NAN, но в этом плане пофиг поскольку если есть ссылка то должна быть эта
-print('======')
-#print(res)
-# стоой погоди - а если не мерджить - а просто историю предлагать - тоесть забить на accounts
-# заить на мердж таймстампов чтоли хочу
-# давай короче вот что - сделаю приджоин обеих таблиц чтобы работало потом посмотрю
+# 1. get card_id / saving_id from account row
+# 2. find card/saving account by ts and id
+# 3. if found == None, return none row
+def join_table(acc_row, ts, df, join_id):
+    id = acc_row[join_id].values[0]
+    #print('ID')
+    #print(id)
+    if not id:
+        return pandas.DataFrame(columns=df.columns, index=[0])
+    #found_row = df[df[(df['ts'] <= ts) & (df[join_id] == id)]['ts'].idxmax()]
 
+    found_row = df[(df['ts'] <= ts)]
+    found_row = found_row[found_row[join_id] == id]
 
-# тааак а что если все в один union, далее показывать по каждому таймстампу - короче таймстамп должен быть только один в каждый момент времени
-# если один и тот же таймстамп в одно время то он попадет в группу [account_id, card_id, ts]. Если попал то мерджим
-# короче - мерджим все в одну таблицу и один в итоге один ts на все
-#
-
-grouped = res.groupby(['account_id', 'savings_account_id', 'ts_savings_account'], dropna=False)
-lst=[]
-for cols, group in grouped:
-    if len(group) == 1:
-        lst.append(group.iloc[0])
-        continue
-
-    closest_row = group[group['ts_account'] <= group[f'ts_savings_account']].sort_values(f'ts_savings_account', ascending=False).iloc[0]
-    lst.append(closest_row)
-
-print(pd.DataFrame.from_records(lst))
+    found_row = found_row.loc[[found_row['ts'].idxmax()]]
+    #print(found_row)
+    return found_row
 
 
-# а вот смотри - смерджить все в одно и потом идти и брать из существующих таблиц джойном
+ts = accounts_history_df['ts'].append(cards_history_df['ts']).append(savings_accounts_history_df['ts']).drop_duplicates()
+
+lst = []
+for row in ts:
+    acc_row = get_status_at_time(row)
+    lst.append(acc_row)
+
+df = pd.DataFrame.append(df, lst).sort_values('ts')
+#print(lst)
+#print(pandas.DataFrame.from_records(dict))
+print(df)
