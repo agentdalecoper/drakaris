@@ -2,10 +2,10 @@ import pandas
 import pandas as pd
 import os
 import json
-from Entity.Account import Account
-from Entity.Events.EventLog import EventLog
-from Entity.Card import Card
-from Entity.SavingAccount import SavingAccount
+from Account import Account
+from EventLog import EventLog
+from Card import Card
+from SavingAccount import SavingAccount
 import configparser
 
 pd.set_option("max_columns", None)
@@ -51,6 +51,7 @@ def process_tables(accounts_path, cards_path, savings_accounts_path):
 def read_dataframe(path):
     events = []
     for filename in os.listdir(path):
+        print(filename)
         js = json.load(open(f"{path}/{filename}"))
         event_log_entry = EventLog(js)
         events.append(event_log_entry)
@@ -126,6 +127,7 @@ def get_corresponding_event_entry(account_row, ts, df, join_id):
 config = configparser.RawConfigParser()
 config.read('config.properties')
 
+print('Started running tables service')
 process_tables(config.get("Events", "account.path"),
                config.get("Events", "card.path"),
                config.get("Events", "savings_account.path"))

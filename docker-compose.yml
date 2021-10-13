@@ -1,0 +1,4 @@
+version: '2'
+services:
+    my_service:
+        build: . # replace <.> with the directory containing your files in the current directory where .yml is located.
