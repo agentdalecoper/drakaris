@@ -1,4 +1,6 @@
-version: '2'
+version: '3'
 services:
-    my_service:
-        build: . # replace <.> with the directory containing your files in the current directory where .yml is located.
+    dfh-service:
+        build:
+            context: .
+            dockerfile: Dockerfile

@@ -36,3 +36,9 @@ etc.
 
 I would do an interface implementation of access to the data - to transfer then to nosql (i.g. hbase) or hdfs. And implement this as a microservice.
 Also introduce it to the k8s or cloud orcestration service.
+
+## 5. Docker
+To launch:
+>docker-compose build
+> 
+>docker-compose up 

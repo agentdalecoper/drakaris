@@ -6,4 +6,4 @@ COPY . .
 RUN ls /app
 RUN pip install -r requirements.txt
 
-ENTRYPOINT python -u DataBaseService.py
+ENTRYPOINT python -u /app/DataProcessingService.py
