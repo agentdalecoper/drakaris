@@ -62,7 +62,6 @@ savings_accounts_logs_df = read_dataframe("data/savings_accounts")
 savings_accounts_history_df = compute_dfs(savings_accounts_logs_df, SavingAccount)
 
 lst = []
-# todo rename status to status_card, status_saving_account
 columns = accounts_history_df.columns
 columns = columns.append(cards_history_df.columns)
 columns = columns.append(savings_accounts_history_df.columns)
@@ -78,7 +77,7 @@ def get_status_at_time(ts):
         acc_row = acc_row.merge(card_row, on=['card_id'], suffixes=('', '_card'))
 
     if acc_row['savings_account_id'].values[0]:
-        saving_row = join_table(acc_row, ts, savings_accounts_history_df, 'savings_account_id')
+        saving_row = join_table(acc_row, ts, savings_accounts_history_df, 'savings_account')
         acc_row = acc_row.merge(saving_row, on=['savings_account_id'], suffixes=('', '_savings_account'))
 
     # print(acc_row)
