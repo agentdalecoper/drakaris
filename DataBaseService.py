@@ -10,7 +10,8 @@ from SavingAccount import SavingAccount
 pd.set_option("max_columns", None)
 pd.set_option('max_colwidth', None)
 pd.set_option("expand_frame_repr", False)
-
+pd.set_option('display.precision', 10)
+pd.options.mode.chained_assignment = None
 
 def read_dataframe(path):
     result_lst = []
@@ -21,7 +22,7 @@ def read_dataframe(path):
 
     result = pd.DataFrame.from_records([s.to_dict() for s in result_lst])
     result = result.sort_values('ts')
-    #print(result)
+    # print(result)
     return result
 
 
@@ -32,7 +33,7 @@ def compute_dfs(df, entity_class):
         for index, row in group.iterrows():
             if row['op'] == 'c':
                 current_entity = entity_class(row['data'], row['ts'])
-                #print(f"Created current object: {current_entity.to_dict()}")
+                # print(f"Created current object: {current_entity.to_dict()}")
 
                 result_rows.append(current_entity.to_dict())
             else:
@@ -42,7 +43,7 @@ def compute_dfs(df, entity_class):
                 for member in members:
                     if getattr(temp_entity, member) is not None:
                         setattr(current_entity, member, getattr(temp_entity, member))
-                        #print(f"Updated current member {member}: {current_entity.to_dict()}")
+                        # print(f"Updated current member {member}: {current_entity.to_dict()}")
 
                 result_rows.append(current_entity.to_dict())
 
@@ -60,15 +61,17 @@ cards_history_df = compute_dfs(cards_logs_df, Card)
 savings_accounts_logs_df = read_dataframe("data/savings_accounts")
 savings_accounts_history_df = compute_dfs(savings_accounts_logs_df, SavingAccount)
 
-lst=[]
+lst = []
+# todo rename status to status_card, status_saving_account
 columns = accounts_history_df.columns
 columns = columns.append(cards_history_df.columns)
 columns = columns.append(savings_accounts_history_df.columns)
 columns = list(dict.fromkeys(columns))
 df = pandas.DataFrame(columns=columns)
 
+
 def get_status_at_time(ts):
-    #print(ts)
+    # print(ts)
     acc_row = accounts_history_df.iloc[[accounts_history_df[accounts_history_df['ts'] <= ts]['ts'].idxmax()]]
     if acc_row['card_id'].values[0]:
         card_row = join_table(acc_row, ts, cards_history_df, 'card_id')
@@ -78,29 +81,34 @@ def get_status_at_time(ts):
         saving_row = join_table(acc_row, ts, savings_accounts_history_df, 'savings_account_id')
         acc_row = acc_row.merge(saving_row, on=['savings_account_id'], suffixes=('', '_savings_account'))
 
-    #print(acc_row)
+    # print(acc_row)
+    acc_row['ts_account'] = acc_row['ts']
+    acc_row['ts'] = ts
     return acc_row
+
 
 # 1. get card_id / saving_id from account row
 # 2. find card/saving account by ts and id
 # 3. if found == None, return none row
 def join_table(acc_row, ts, df, join_id):
     id = acc_row[join_id].values[0]
-    #print('ID')
-    #print(id)
+    # print('ID')
+    # print(id)
     if not id:
         return pandas.DataFrame(columns=df.columns, index=[0])
-    #found_row = df[df[(df['ts'] <= ts) & (df[join_id] == id)]['ts'].idxmax()]
+    # found_row = df[df[(df['ts'] <= ts) & (df[join_id] == id)]['ts'].idxmax()]
 
     found_row = df[(df['ts'] <= ts)]
     found_row = found_row[found_row[join_id] == id]
 
     found_row = found_row.loc[[found_row['ts'].idxmax()]]
-    #print(found_row)
+    found_row = found_row.rename(columns={'status': 'status_' + join_id})
+    # print(found_row)
     return found_row
 
 
-ts = accounts_history_df['ts'].append(cards_history_df['ts']).append(savings_accounts_history_df['ts']).drop_duplicates()
+ts = accounts_history_df['ts'].append(cards_history_df['ts']).append(
+    savings_accounts_history_df['ts']).drop_duplicates()
 
 lst = []
 for row in ts:
@@ -108,6 +116,6 @@ for row in ts:
     lst.append(acc_row)
 
 df = pd.DataFrame.append(df, lst).sort_values('ts')
-#print(lst)
-#print(pandas.DataFrame.from_records(dict))
+df.drop(columns=['status'], inplace=True)
+
 print(df)
