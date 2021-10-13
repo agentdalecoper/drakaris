@@ -13,38 +13,37 @@ pd.set_option("expand_frame_repr", False)
 pd.set_option('display.precision', 10)
 pd.options.mode.chained_assignment = None
 
+
 def read_dataframe(path):
-    result_lst = []
+    events = []
     for filename in os.listdir(path):
         js = json.load(open(f"{path}/{filename}"))
-        event_log = EventLog(js)
-        result_lst.append(event_log)
+        event_log_entry = EventLog(js)
+        events.append(event_log_entry)
 
-    result = pd.DataFrame.from_records([s.to_dict() for s in result_lst])
+    result = pd.DataFrame.from_records([s.to_dict() for s in events])
     result = result.sort_values('ts')
-    # print(result)
     return result
 
 
-def compute_dfs(df, entity_class):
+def get_history_table(df, entity_class):
     result_rows = []
     groups = df.groupby('id')
     for name, group in groups:
         for index, row in group.iterrows():
+            # if operation is create, then 'data' is the body
+            # current entity should be always created before any of updates
             if row['op'] == 'c':
                 current_entity = entity_class(row['data'], row['ts'])
-                # print(f"Created current object: {current_entity.to_dict()}")
-
                 result_rows.append(current_entity.to_dict())
             else:
                 temp_entity = entity_class(row['set'], row['ts'])
+                # set dynamicly field of the current entity from update log entry
                 members = [attr for attr in dir(temp_entity) if
                            not callable(getattr(temp_entity, attr)) and not attr.startswith("__")]
                 for member in members:
                     if getattr(temp_entity, member) is not None:
                         setattr(current_entity, member, getattr(temp_entity, member))
-                        # print(f"Updated current member {member}: {current_entity.to_dict()}")
-
                 result_rows.append(current_entity.to_dict())
 
     result = pd.DataFrame.from_records(result_rows).sort_values('ts')
@@ -52,69 +51,75 @@ def compute_dfs(df, entity_class):
     return result
 
 
-accounts_log_df = read_dataframe("data/accounts")
-accounts_history_df = compute_dfs(accounts_log_df, Account)
+# for given time calculate actual state of tables
+def get_history_entry_at_time(ts, accounts_history_df, cards_history_df, savings_accounts_history_df):
+    # find account history row most recent to this timestamp
+    account_row = accounts_history_df.iloc[[accounts_history_df[accounts_history_df['ts'] <= ts]['ts'].idxmax()]]
 
-cards_logs_df = read_dataframe("data/cards")
-cards_history_df = compute_dfs(cards_logs_df, Card)
+    # if join id exists
+    if account_row['card_id'].values[0]:
+        card_row = get_corresponding_event_entry(account_row, ts, cards_history_df, 'card_id')
+        account_row = account_row.merge(card_row, on=['card_id'], suffixes=('', '_card'))
 
-savings_accounts_logs_df = read_dataframe("data/savings_accounts")
-savings_accounts_history_df = compute_dfs(savings_accounts_logs_df, SavingAccount)
+    if account_row['savings_account_id'].values[0]:
+        saving_row = get_corresponding_event_entry(account_row, ts, savings_accounts_history_df, 'savings_account_id')
+        account_row = account_row.merge(saving_row, on=['savings_account_id'], suffixes=('', '_savings_account'))
 
-lst = []
-columns = accounts_history_df.columns
-columns = columns.append(cards_history_df.columns)
-columns = columns.append(savings_accounts_history_df.columns)
-columns = list(dict.fromkeys(columns))
-df = pandas.DataFrame(columns=columns)
+    # ts_account is the accounts timestamp
+    account_row['ts_account'] = account_row['ts']
+    account_row['ts'] = ts
 
-
-def get_status_at_time(ts):
-    # print(ts)
-    acc_row = accounts_history_df.iloc[[accounts_history_df[accounts_history_df['ts'] <= ts]['ts'].idxmax()]]
-    if acc_row['card_id'].values[0]:
-        card_row = join_table(acc_row, ts, cards_history_df, 'card_id')
-        acc_row = acc_row.merge(card_row, on=['card_id'], suffixes=('', '_card'))
-
-    if acc_row['savings_account_id'].values[0]:
-        saving_row = join_table(acc_row, ts, savings_accounts_history_df, 'savings_account')
-        acc_row = acc_row.merge(saving_row, on=['savings_account_id'], suffixes=('', '_savings_account'))
-
-    # print(acc_row)
-    acc_row['ts_account'] = acc_row['ts']
-    acc_row['ts'] = ts
-    return acc_row
+    return account_row
 
 
-# 1. get card_id / saving_id from account row
-# 2. find card/saving account by ts and id
-# 3. if found == None, return none row
-def join_table(acc_row, ts, df, join_id):
-    id = acc_row[join_id].values[0]
-    # print('ID')
-    # print(id)
-    if not id:
-        return pandas.DataFrame(columns=df.columns, index=[0])
-    # found_row = df[df[(df['ts'] <= ts) & (df[join_id] == id)]['ts'].idxmax()]
+# get corresponding entry in table for this timestamp ts
+def get_corresponding_event_entry(account_row, ts, df, join_id):
+    # get join id
+    id = account_row[join_id].values[0]
 
+    # find entry which was happend before ts and which is correspondand to this id
     found_row = df[(df['ts'] <= ts)]
     found_row = found_row[found_row[join_id] == id]
 
+    # get most recent state
     found_row = found_row.loc[[found_row['ts'].idxmax()]]
+
+    # rename status column to the concrete table name
     found_row = found_row.rename(columns={'status': 'status_' + join_id})
-    # print(found_row)
     return found_row
 
 
-ts = accounts_history_df['ts'].append(cards_history_df['ts']).append(
-    savings_accounts_history_df['ts']).drop_duplicates()
+def process_tables():
+    accounts_log_df = read_dataframe("data/accounts")
+    accounts_history_df = get_history_table(accounts_log_df, Account)
 
-lst = []
-for row in ts:
-    acc_row = get_status_at_time(row)
-    lst.append(acc_row)
+    cards_logs_df = read_dataframe("data/cards")
+    cards_history_df = get_history_table(cards_logs_df, Card)
 
-df = pd.DataFrame.append(df, lst).sort_values('ts')
-df.drop(columns=['status'], inplace=True)
+    savings_accounts_logs_df = read_dataframe("data/savings_accounts")
+    savings_accounts_history_df = get_history_table(savings_accounts_logs_df, SavingAccount)
 
-print(df)
+    # create df with columns with all tables
+    joined_df_columns = accounts_history_df.columns
+    joined_df_columns = joined_df_columns.append(cards_history_df.columns)
+    joined_df_columns = joined_df_columns.append(savings_accounts_history_df.columns)
+    joined_df_columns = list(dict.fromkeys(joined_df_columns))
+    joined_df = pandas.DataFrame(columns=joined_df_columns)
+
+    # get dataframe with unique timestamps across all tables
+    timestamps_df = accounts_history_df['ts'].append(cards_history_df['ts']).append(
+        savings_accounts_history_df['ts']).drop_duplicates()
+
+    # iterate over all timestamps and get current state of the system for each ts
+    history_rows = []
+    for timestamp in timestamps_df:
+        acc_row = get_history_entry_at_time(timestamp, accounts_history_df, cards_history_df,
+                                            savings_accounts_history_df)
+        history_rows.append(acc_row)
+
+    joined_df = pd.DataFrame.append(joined_df, history_rows).sort_values('ts')
+    joined_df.drop(columns=['status'], inplace=True)
+    print(joined_df)
+
+
+process_tables()
