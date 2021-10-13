@@ -87,6 +87,7 @@ def get_history_table(df, entity_class):
 
 
 # for given time calculate actual state of tables
+# algorithm is - go ts by ts and retreive and join state of all tables with latest timestamp
 def get_history_entry_at_time(ts, accounts_history_df, cards_history_df, savings_accounts_history_df):
     # find account history row most recent to this timestamp
     account_row = accounts_history_df.iloc[[accounts_history_df[accounts_history_df['ts'] <= ts]['ts'].idxmax()]]
