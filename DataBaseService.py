@@ -15,7 +15,6 @@ pd.set_option('display.precision', 10)
 pd.options.mode.chained_assignment = None
 
 
-
 def process_tables(accounts_path, cards_path, savings_accounts_path):
     accounts_log_df = read_dataframe(accounts_path)
     accounts_history_df = get_history_table(accounts_log_df, Account)
@@ -47,6 +46,7 @@ def process_tables(accounts_path, cards_path, savings_accounts_path):
     joined_df = pd.DataFrame.append(joined_df, history_rows).sort_values('ts')
     joined_df.drop(columns=['status'], inplace=True)
     print(joined_df)
+
 
 def read_dataframe(path):
     events = []
@@ -121,6 +121,7 @@ def get_corresponding_event_entry(account_row, ts, df, join_id):
     # rename status column to the concrete table name
     found_row = found_row.rename(columns={'status': 'status_' + join_id})
     return found_row
+
 
 config = configparser.RawConfigParser()
 config.read('config.properties')
