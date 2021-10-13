@@ -2,10 +2,11 @@ import pandas
 import pandas as pd
 import os
 import json
-from Account import Account
-from EventLog import EventLog
-from Card import Card
-from SavingAccount import SavingAccount
+from Entity.Account import Account
+from Entity.Events.EventLog import EventLog
+from Entity.Card import Card
+from Entity.SavingAccount import SavingAccount
+import configparser
 
 pd.set_option("max_columns", None)
 pd.set_option('max_colwidth', None)
@@ -13,6 +14,39 @@ pd.set_option("expand_frame_repr", False)
 pd.set_option('display.precision', 10)
 pd.options.mode.chained_assignment = None
 
+
+
+def process_tables(accounts_path, cards_path, savings_accounts_path):
+    accounts_log_df = read_dataframe(accounts_path)
+    accounts_history_df = get_history_table(accounts_log_df, Account)
+
+    cards_logs_df = read_dataframe(cards_path)
+    cards_history_df = get_history_table(cards_logs_df, Card)
+
+    savings_accounts_logs_df = read_dataframe(savings_accounts_path)
+    savings_accounts_history_df = get_history_table(savings_accounts_logs_df, SavingAccount)
+
+    # create df with columns with all tables
+    joined_df_columns = accounts_history_df.columns
+    joined_df_columns = joined_df_columns.append(cards_history_df.columns)
+    joined_df_columns = joined_df_columns.append(savings_accounts_history_df.columns)
+    joined_df_columns = list(dict.fromkeys(joined_df_columns))
+    joined_df = pandas.DataFrame(columns=joined_df_columns)
+
+    # get dataframe with unique timestamps across all tables
+    timestamps_df = accounts_history_df['ts'].append(cards_history_df['ts']).append(
+        savings_accounts_history_df['ts']).drop_duplicates()
+
+    # iterate over all timestamps and get current state of the system for each ts
+    history_rows = []
+    for timestamp in timestamps_df:
+        acc_row = get_history_entry_at_time(timestamp, accounts_history_df, cards_history_df,
+                                            savings_accounts_history_df)
+        history_rows.append(acc_row)
+
+    joined_df = pd.DataFrame.append(joined_df, history_rows).sort_values('ts')
+    joined_df.drop(columns=['status'], inplace=True)
+    print(joined_df)
 
 def read_dataframe(path):
     events = []
@@ -88,38 +122,9 @@ def get_corresponding_event_entry(account_row, ts, df, join_id):
     found_row = found_row.rename(columns={'status': 'status_' + join_id})
     return found_row
 
+config = configparser.RawConfigParser()
+config.read('config.properties')
 
-def process_tables():
-    accounts_log_df = read_dataframe("data/accounts")
-    accounts_history_df = get_history_table(accounts_log_df, Account)
-
-    cards_logs_df = read_dataframe("data/cards")
-    cards_history_df = get_history_table(cards_logs_df, Card)
-
-    savings_accounts_logs_df = read_dataframe("data/savings_accounts")
-    savings_accounts_history_df = get_history_table(savings_accounts_logs_df, SavingAccount)
-
-    # create df with columns with all tables
-    joined_df_columns = accounts_history_df.columns
-    joined_df_columns = joined_df_columns.append(cards_history_df.columns)
-    joined_df_columns = joined_df_columns.append(savings_accounts_history_df.columns)
-    joined_df_columns = list(dict.fromkeys(joined_df_columns))
-    joined_df = pandas.DataFrame(columns=joined_df_columns)
-
-    # get dataframe with unique timestamps across all tables
-    timestamps_df = accounts_history_df['ts'].append(cards_history_df['ts']).append(
-        savings_accounts_history_df['ts']).drop_duplicates()
-
-    # iterate over all timestamps and get current state of the system for each ts
-    history_rows = []
-    for timestamp in timestamps_df:
-        acc_row = get_history_entry_at_time(timestamp, accounts_history_df, cards_history_df,
-                                            savings_accounts_history_df)
-        history_rows.append(acc_row)
-
-    joined_df = pd.DataFrame.append(joined_df, history_rows).sort_values('ts')
-    joined_df.drop(columns=['status'], inplace=True)
-    print(joined_df)
-
-
-process_tables()
+process_tables(config.get("Events", "account.path"),
+               config.get("Events", "card.path"),
+               config.get("Events", "savings_account.path"))
