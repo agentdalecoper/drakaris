@@ -32,5 +32,7 @@ etc.
 
 ## 4. Thoughts on the process, future work
 
+![img_7.png](img_7.png)
+
 I would do an interface implementation of access to the data - to transfer then to nosql (i.g. hbase) or hdfs. And implement this as a microservice.
 Also introduce it to the k8s or cloud orcestration service.
